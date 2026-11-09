@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#2563EB</color>
+    <color name="primary_dark">#1D4ED8</color>
+    <color name="primary_light">#E8EEFF</color>
+    <color name="bg">#F4F6FB</color>
+    <color name="white">#FFFFFF</color>
+    <color name="stroke">#DCE3F0</color>
+    <color name="text_primary">#0F1B3D</color>
+    <color name="text_secondary">#6B7385</color>
+    <color name="text_hint">#9AA3B5</color>
+    <color name="gap_bg">#F1F4FA</color>
+    <color name="danger">#D93025</color>
+    <color name="danger_bg">#FDECEA</color>
+    <color name="success">#1E8E3E</color>
+    <color name="warn_bg">#FFF1E3</color>
+    <color name="warn_text">#B45309</color>
+    <color name="track">#E3E8F5</color>
+    <color name="row_bg">#F3F5FB</color>
+    <color name="row_today">#F2F6FF</color>
+    <color name="card_today">#E8F0FF</color>
+    <color name="status_done_bg">#E6F4EA</color>
+    <color name="status_pause_bg">#ECEFF4</color>
+    <color name="status_pause_text">#5F6B7F</color>
+</resources>

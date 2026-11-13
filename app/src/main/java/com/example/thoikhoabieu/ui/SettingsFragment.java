@@ -23,22 +23,27 @@ import androidx.fragment.app.Fragment;
 
 import com.example.thoikhoabieu.MainActivity;
 import com.example.thoikhoabieu.R;
+import com.example.thoikhoabieu.data.ScheduleRepository;
 import com.example.thoikhoabieu.model.Schedule;
 import com.example.thoikhoabieu.notify.NotificationHelper;
 import com.example.thoikhoabieu.notify.ReminderScheduler;
+import com.example.thoikhoabieu.trash.TrashActivity;
+import com.example.thoikhoabieu.trash.TrashManager;
 import com.example.thoikhoabieu.util.DateUtil;
 import com.example.thoikhoabieu.util.Prefs;
 import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.util.Calendar;
+import java.util.List;
 
 public class SettingsFragment extends Fragment {
-    private boolean enabled, sound, vibrate, quiet;
-    private int lead, qStart, qEnd;
+    private boolean enabled, sound, vibrate, quiet, cleanupEnabled;
+    private int lead, qStart, qEnd, retentionDays;
 
-    private MaterialSwitch swReminder, swSound, swVibrate, swQuiet;
+    private MaterialSwitch swReminder, swSound, swVibrate, swQuiet, swCleanup;
     private TextView tvPerm, tvQuietRange, tvPreview, chip5, chip15, chip30;
-    private View body;
+    private TextView tvRet15, tvRet17, tvRet20, tvTrashBadge;
+    private View body, cleanupBody, layoutRowTrash, btnTriggerCleanupNow;
 
     private final ActivityResultLauncher<String> permLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -59,11 +64,14 @@ public class SettingsFragment extends Fragment {
         quiet = Prefs.quietEnabled(ctx);
         qStart = Prefs.quietStart(ctx);
         qEnd = Prefs.quietEnd(ctx);
+        cleanupEnabled = Prefs.cleanupPromptEnabled(ctx);
+        retentionDays = Prefs.retentionDays(ctx);
 
         swReminder = v.findViewById(R.id.sw_reminder);
         swSound = v.findViewById(R.id.sw_sound);
         swVibrate = v.findViewById(R.id.sw_vibrate);
         swQuiet = v.findViewById(R.id.sw_quiet);
+        swCleanup = v.findViewById(R.id.sw_cleanup);
         tvPerm = v.findViewById(R.id.tv_perm_status);
         tvQuietRange = v.findViewById(R.id.tv_quiet_range);
         tvPreview = v.findViewById(R.id.tv_preview);
@@ -72,10 +80,19 @@ public class SettingsFragment extends Fragment {
         chip30 = v.findViewById(R.id.tv_lead_30);
         body = v.findViewById(R.id.settings_body);
 
+        cleanupBody = v.findViewById(R.id.cleanup_settings_body);
+        tvRet15 = v.findViewById(R.id.tv_retention_15);
+        tvRet17 = v.findViewById(R.id.tv_retention_17);
+        tvRet20 = v.findViewById(R.id.tv_retention_20);
+        layoutRowTrash = v.findViewById(R.id.layout_row_trash);
+        tvTrashBadge = v.findViewById(R.id.tv_trash_badge);
+        btnTriggerCleanupNow = v.findViewById(R.id.btn_trigger_cleanup_now);
+
         swReminder.setChecked(enabled);
         swSound.setChecked(sound);
         swVibrate.setChecked(vibrate);
         swQuiet.setChecked(quiet);
+        swCleanup.setChecked(cleanupEnabled);
 
         swReminder.setOnCheckedChangeListener((bv, on) -> {
             enabled = on;
@@ -85,10 +102,18 @@ public class SettingsFragment extends Fragment {
         swSound.setOnCheckedChangeListener((bv, on) -> { sound = on; updateUi(); });
         swVibrate.setOnCheckedChangeListener((bv, on) -> { vibrate = on; updateUi(); });
         swQuiet.setOnCheckedChangeListener((bv, on) -> { quiet = on; updateUi(); });
+        swCleanup.setOnCheckedChangeListener((bv, on) -> { cleanupEnabled = on; updateUi(); });
 
         chip5.setOnClickListener(x -> { lead = 5; updateUi(); });
         chip15.setOnClickListener(x -> { lead = 15; updateUi(); });
         chip30.setOnClickListener(x -> { lead = 30; updateUi(); });
+
+        tvRet15.setOnClickListener(x -> { retentionDays = 15; updateUi(); });
+        tvRet17.setOnClickListener(x -> { retentionDays = 17; updateUi(); });
+        tvRet20.setOnClickListener(x -> { retentionDays = 20; updateUi(); });
+
+        layoutRowTrash.setOnClickListener(x -> startActivity(new Intent(requireContext(), TrashActivity.class)));
+        btnTriggerCleanupNow.setOnClickListener(x -> manualTriggerCleanup());
 
         tvQuietRange.setOnClickListener(x -> pickQuietRange());
         tvPerm.setOnClickListener(x -> {
@@ -104,6 +129,23 @@ public class SettingsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         updatePermStatus();
+        updateTrashBadge();
+    }
+
+    private void updateTrashBadge() {
+        if (!isAdded()) return;
+        int count = ScheduleRepository.get(requireContext()).getTrashCount();
+        tvTrashBadge.setText(count + " buổi");
+    }
+
+    private void manualTriggerCleanup() {
+        Context ctx = requireContext();
+        List<Schedule> eligible = ScheduleRepository.get(ctx).getEligibleOldSchedules(retentionDays);
+        if (eligible.isEmpty()) {
+            Toast.makeText(ctx, "Không có buổi học nào đã kết thúc quá " + retentionDays + " ngày.", Toast.LENGTH_SHORT).show();
+        } else {
+            TrashManager.showCleanupDialog(requireActivity(), ScheduleRepository.get(ctx), eligible, retentionDays);
+        }
     }
 
     private void requestPermissionIfNeeded() {
@@ -147,6 +189,14 @@ public class SettingsFragment extends Fragment {
         t.setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
     }
 
+    private void styleRetention(TextView t, int value) {
+        boolean sel = retentionDays == value;
+        t.setBackgroundResource(sel ? R.drawable.bg_chip_selected : R.drawable.bg_chip);
+        t.setTextColor(ContextCompat.getColor(requireContext(), sel ? R.color.primary : R.color.text_primary));
+        t.setText((sel ? "✓ " : "") + value + " ngày");
+        t.setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+    }
+
     private void setEnabledDeep(View v, boolean on) {
         v.setEnabled(on);
         if (v instanceof ViewGroup) {
@@ -159,11 +209,17 @@ public class SettingsFragment extends Fragment {
         styleLead(chip5, 5);
         styleLead(chip15, 15);
         styleLead(chip30, 30);
+        styleRetention(tvRet15, 15);
+        styleRetention(tvRet17, 17);
+        styleRetention(tvRet20, 20);
         tvQuietRange.setText(DateUtil.hm(qStart) + " – " + DateUtil.hm(qEnd));
         body.setAlpha(enabled ? 1f : 0.45f);
         setEnabledDeep(body, enabled);
+        cleanupBody.setAlpha(cleanupEnabled ? 1f : 0.45f);
+        setEnabledDeep(cleanupBody, cleanupEnabled);
         tvQuietRange.setEnabled(enabled && quiet);
         updatePermStatus();
+        updateTrashBadge();
         updatePreview();
     }
 
@@ -204,6 +260,8 @@ public class SettingsFragment extends Fragment {
         Prefs.setVibrate(ctx, vibrate);
         Prefs.setQuietEnabled(ctx, quiet);
         Prefs.setQuietRange(ctx, qStart, qEnd);
+        Prefs.setCleanupPromptEnabled(ctx, cleanupEnabled);
+        Prefs.setRetentionDays(ctx, retentionDays);
         ReminderScheduler.scheduleNext(ctx);
         Toast.makeText(ctx, "Đã lưu cài đặt", Toast.LENGTH_SHORT).show();
     }

@@ -28,6 +28,12 @@ public class MainActivity extends AppCompatActivity {
         ReminderScheduler.scheduleNext(this);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        com.example.thoikhoabieu.trash.TrashManager.checkAndPromptCleanup(this);
+    }
+
     private void show(int id) {
         Fragment f;
         if (id == R.id.nav_detail) f = new DetailFragment();

@@ -26,6 +26,35 @@ public class Schedule {
     public String note;
     public String status = DANG_HOC;
 
+    /** Thời điểm đưa vào thùng rác (epoch millis); null nếu đang hoạt động. */
+    public Long trashedAt;
+    /** Thời điểm đủ điều kiện xóa vĩnh viễn (epoch millis); null nếu đang hoạt động. */
+    public Long purgeAfter;
+    /** Cờ ưu tiên hiển thị khi nằm trong nhóm lịch trùng giờ. */
+    public boolean isPriority;
+
+    public boolean isTrashed() {
+        return trashedAt != null && trashedAt > 0;
+    }
+
+    public boolean isPurgeEligible() {
+        return isTrashed() && purgeAfter != null && System.currentTimeMillis() >= purgeAfter;
+    }
+
+    public String timeLeftText() {
+        if (!isTrashed() || purgeAfter == null) return "";
+        long diff = purgeAfter - System.currentTimeMillis();
+        if (diff <= 0) return "Đã đủ điều kiện xóa vĩnh viễn";
+        long days = diff / (24 * 3600 * 1000L);
+        long hours = (diff % (24 * 3600 * 1000L)) / (3600 * 1000L);
+        if (days > 0) {
+            return "Còn " + days + " ngày " + hours + " giờ để khôi phục";
+        } else {
+            long mins = (diff % (3600 * 1000L)) / (60 * 1000L);
+            return "Còn " + hours + " giờ " + mins + " phút để khôi phục";
+        }
+    }
+
     public int duration() {
         return endMin - startMin;
     }
@@ -58,6 +87,9 @@ public class Schedule {
         o.put("endMin", endMin);
         o.put("note", note == null ? "" : note);
         o.put("status", status == null ? DANG_HOC : status);
+        if (trashedAt != null) o.put("trashedAt", trashedAt);
+        if (purgeAfter != null) o.put("purgeAfter", purgeAfter);
+        o.put("isPriority", isPriority);
         return o;
     }
 
@@ -72,6 +104,9 @@ public class Schedule {
         s.endMin = o.optInt("endMin");
         s.note = o.optString("note", "");
         s.status = o.optString("status", DANG_HOC);
+        if (o.has("trashedAt")) s.trashedAt = o.optLong("trashedAt");
+        if (o.has("purgeAfter")) s.purgeAfter = o.optLong("purgeAfter");
+        s.isPriority = o.optBoolean("isPriority", false);
         return s;
     }
 }

@@ -1,0 +1,4 @@
+﻿Ngày,Thứ,Bắt đầu,Kết thúc,Số tiết,Môn học,Lớp,Phòng,Trạng thái,Ghi chú
+24/08/2026,Thứ Hai,07:00,08:30,2,Lập trình thiết bị di động,21DTH01,A2-301,Đang học,Trùng hoàn toàn với lịch đã import từ file 01
+24/08/2026,Thứ Hai,07:30,09:00,2,Môn trùng giờ DB,21DTH01,B2-101,Đang học,Xung đột giờ với môn Lập trình di động
+24/08/2026,Thứ Hai,11:00,12:30,2,Môn khung giờ trưa,21DTH01,A2-301,Đang học,Hợp lệ không trùng

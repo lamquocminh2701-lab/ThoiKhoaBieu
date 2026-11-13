@@ -84,6 +84,9 @@ public class StatsFragment extends Fragment {
         v.findViewById(R.id.card_semester).setOnClickListener(x -> chooseSemester());
         v.findViewById(R.id.btn_export_csv).setOnClickListener(x -> export(false));
         v.findViewById(R.id.btn_export_pdf).setOnClickListener(x -> export(true));
+        v.findViewById(R.id.btn_import_schedule).setOnClickListener(x -> {
+            startActivity(new Intent(requireContext(), com.example.thoikhoabieu.importer.ImportScheduleActivity.class));
+        });
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b2, int c) { }
             @Override public void onTextChanged(CharSequence s, int a, int b2, int c) { renderBars(); }

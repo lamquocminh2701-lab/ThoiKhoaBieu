@@ -16,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 
@@ -60,7 +61,11 @@ public class ScheduleRepository {
     }
 
     private static final String T = "schedule";
-    private static final String[] COLS = {"id", "subject", "class_name", "room", "date", "start_min", "end_min", "note", "status"};
+    private static final String[] COLS = {
+            "id", "subject", "class_name", "room", "date",
+            "start_min", "end_min", "note", "status",
+            "trashed_at", "purge_after", "is_priority"
+    };
     private static ScheduleRepository instance;
 
     public static synchronized ScheduleRepository get(Context ctx) {
@@ -80,9 +85,11 @@ public class ScheduleRepository {
     // ================================================================ SQLite
 
     private static class Helper extends SQLiteOpenHelper {
-        // Phiên bản 1: bản SQLite đầu tiên (chưa có cột status). Phiên bản 2: thêm cột status.
+        // Phiên bản 1: bản SQLite đầu tiên.
+        // Phiên bản 2: thêm cột status.
+        // Phiên bản 3: thêm trashed_at, purge_after (thùng rác), is_priority (lịch ưu tiên).
         Helper(Context c) {
-            super(c, "timetable.db", null, 2);
+            super(c, "timetable.db", null, 3);
         }
 
         @Override
@@ -97,15 +104,25 @@ public class ScheduleRepository {
                     + "end_min INTEGER NOT NULL,"
                     + "note TEXT,"
                     + "status TEXT NOT NULL DEFAULT 'DANG_HOC',"
+                    + "trashed_at INTEGER,"
+                    + "purge_after INTEGER,"
+                    + "is_priority INTEGER NOT NULL DEFAULT 0,"
                     + "CHECK (end_min > start_min))");
             db.execSQL("CREATE INDEX idx_schedule_date ON " + T + " (date, start_min)");
+            db.execSQL("CREATE INDEX idx_schedule_trash ON " + T + " (trashed_at, purge_after)");
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            // Giữ nguyên dữ liệu cũ, chỉ thêm cột trạng thái môn học.
+            // Giữ nguyên dữ liệu cũ, nâng cấp schema an toàn
             if (oldVersion < 2) {
                 db.execSQL("ALTER TABLE " + T + " ADD COLUMN status TEXT NOT NULL DEFAULT 'DANG_HOC'");
+            }
+            if (oldVersion < 3) {
+                db.execSQL("ALTER TABLE " + T + " ADD COLUMN trashed_at INTEGER");
+                db.execSQL("ALTER TABLE " + T + " ADD COLUMN purge_after INTEGER");
+                db.execSQL("ALTER TABLE " + T + " ADD COLUMN is_priority INTEGER NOT NULL DEFAULT 0");
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedule_trash ON " + T + " (trashed_at, purge_after)");
             }
         }
     }
@@ -121,6 +138,11 @@ public class ScheduleRepository {
         s.endMin = c.getInt(6);
         s.note = c.getString(7);
         s.status = c.getString(8) == null ? Schedule.DANG_HOC : c.getString(8);
+        if (c.getColumnCount() > 9) {
+            s.trashedAt = c.isNull(9) ? null : c.getLong(9);
+            s.purgeAfter = c.isNull(10) ? null : c.getLong(10);
+            s.isPriority = c.getInt(11) == 1;
+        }
         return s;
     }
 
@@ -142,6 +164,11 @@ public class ScheduleRepository {
         v.put("end_min", s.endMin);
         v.put("note", s.note);
         v.put("status", s.status == null ? Schedule.DANG_HOC : s.status);
+        if (s.trashedAt != null) v.put("trashed_at", s.trashedAt);
+        else v.putNull("trashed_at");
+        if (s.purgeAfter != null) v.put("purge_after", s.purgeAfter);
+        else v.putNull("purge_after");
+        v.put("is_priority", s.isPriority ? 1 : 0);
         return v;
     }
 
@@ -153,18 +180,19 @@ public class ScheduleRepository {
         return l.isEmpty() ? null : l.get(0);
     }
 
+    /** Lấy tất cả lịch học đang hoạt động trong ngày (loại trừ thùng rác). */
     public List<Schedule> getByDate(String date) {
-        return query(helper.getReadableDatabase(), "date=?", new String[]{date}, "start_min ASC");
+        return query(helper.getReadableDatabase(), "date=? AND trashed_at IS NULL", new String[]{date}, "start_min ASC");
     }
 
-    /** Các buổi học trong [from, to] (yyyy-MM-dd, so sánh chuỗi), sắp theo ngày rồi giờ. */
+    /** Các buổi học đang hoạt động trong [from, to] (loại trừ thùng rác), sắp theo ngày rồi giờ. */
     public List<Schedule> getRange(String from, String to) {
-        return query(helper.getReadableDatabase(), "date>=? AND date<=?", new String[]{from, to}, "date ASC, start_min ASC");
+        return query(helper.getReadableDatabase(), "date>=? AND date<=? AND trashed_at IS NULL", new String[]{from, to}, "date ASC, start_min ASC");
     }
 
-    /** Ngày nhỏ nhất sau {@code iso} có lịch học, hoặc null. */
+    /** Ngày nhỏ nhất sau {@code iso} có lịch học đang hoạt động, hoặc null. */
     public String getNextDateAfter(String iso) {
-        try (Cursor c = helper.getReadableDatabase().rawQuery("SELECT MIN(date) FROM " + T + " WHERE date>?", new String[]{iso})) {
+        try (Cursor c = helper.getReadableDatabase().rawQuery("SELECT MIN(date) FROM " + T + " WHERE date>? AND trashed_at IS NULL", new String[]{iso})) {
             if (c.moveToFirst() && !c.isNull(0)) return c.getString(0);
         }
         return null;
@@ -175,8 +203,8 @@ public class ScheduleRepository {
     }
 
     private List<Schedule> conflicts(SQLiteDatabase db, String date, int start, int end, String excludeId) {
-        // Hai khoảng [a,b) và [c,d) giao nhau khi a<d và b>c.
-        return query(db, "date=? AND start_min<? AND end_min>? AND id<>?",
+        // Hai khoảng [a,b) và [c,d) giao nhau khi a<d và b>c. Chỉ xét lịch đang hoạt động.
+        return query(db, "date=? AND start_min<? AND end_min>? AND id<>? AND trashed_at IS NULL",
                 new String[]{date, String.valueOf(end), String.valueOf(start), excludeId == null ? "-1" : excludeId},
                 "start_min ASC");
     }
@@ -221,11 +249,19 @@ public class ScheduleRepository {
     // ================================================================ ghi
 
     public void insert(Schedule s, Callback cb) {
-        finish(write(s, null), cb);
+        insert(s, false, cb);
+    }
+
+    public void insert(Schedule s, boolean allowConflict, Callback cb) {
+        finish(write(s, null, allowConflict), cb);
     }
 
     public void update(Schedule s, Callback cb) {
-        finish(write(s, s.id), cb);
+        update(s, false, cb);
+    }
+
+    public void update(Schedule s, boolean allowConflict, Callback cb) {
+        finish(write(s, s.id, allowConflict), cb);
     }
 
     public void delete(String id, Callback cb) {
@@ -239,13 +275,232 @@ public class ScheduleRepository {
         finish(r, cb);
     }
 
-    /** Ghi trong một transaction: kiểm tra trùng lịch (có GAP phút nghỉ) rồi mới ghi. */
-    private Result write(Schedule s, String id) {
+    // ================================================================ Thùng rác & Lịch ưu tiên
+
+    /**
+     * Chuyển danh sách lịch học vào thùng rác (soft delete).
+     * Đặt trashed_at = now, purge_after = now + 6 ngày.
+     */
+    public void moveToTrash(List<String> ids, Callback cb) {
+        if (ids == null || ids.isEmpty()) {
+            if (cb != null) cb.onResult(new Result(Result.OK, null, null, null));
+            return;
+        }
+        SQLiteDatabase db = helper.getWritableDatabase();
+        long now = System.currentTimeMillis();
+        long purgeAfter = now + 6 * 86_400_000L; // 6 ngày lưu trữ
+        ContentValues cv = new ContentValues();
+        cv.put("trashed_at", now);
+        cv.put("purge_after", purgeAfter);
+        cv.put("is_priority", 0);
+
+        db.beginTransaction();
+        Result r;
+        try {
+            for (String id : ids) {
+                db.update(T, cv, "id=?", new String[]{id});
+            }
+            db.setTransactionSuccessful();
+            r = new Result(Result.OK, "Đã chuyển " + ids.size() + " buổi học vào thùng rác.", null, null);
+        } catch (Exception e) {
+            r = new Result(Result.ERROR, "Lỗi khi chuyển vào thùng rác: " + e.getMessage(), null, null);
+        } finally {
+            db.endTransaction();
+        }
+        finish(r, cb);
+    }
+
+    /**
+     * Khôi phục một buổi học từ thùng rác về thời khóa biểu bình thường.
+     */
+    public void restoreFromTrash(String id, Callback cb) {
+        if (id == null) return;
+        SQLiteDatabase db = helper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.putNull("trashed_at");
+        cv.putNull("purge_after");
+
+        Result r;
+        try {
+            int n = db.update(T, cv, "id=?", new String[]{id});
+            if (n > 0) {
+                r = new Result(Result.OK, "Đã khôi phục buổi học thành công.", null, null);
+            } else {
+                r = new Result(Result.ERROR, "Không tìm thấy buổi học để khôi phục.", null, null);
+            }
+        } catch (Exception e) {
+            r = new Result(Result.ERROR, "Lỗi khi khôi phục: " + e.getMessage(), null, null);
+        }
+        finish(r, cb);
+    }
+
+    /**
+     * Khôi phục tất cả buổi học trong thùng rác.
+     */
+    public void restoreAllTrash(Callback cb) {
+        SQLiteDatabase db = helper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.putNull("trashed_at");
+        cv.putNull("purge_after");
+
+        Result r;
+        try {
+            int n = db.update(T, cv, "trashed_at IS NOT NULL", null);
+            r = new Result(Result.OK, "Đã khôi phục " + n + " buổi học.", null, null);
+        } catch (Exception e) {
+            r = new Result(Result.ERROR, "Lỗi khi khôi phục tất cả: " + e.getMessage(), null, null);
+        }
+        finish(r, cb);
+    }
+
+    /**
+     * Lấy danh sách các buổi học đang nằm trong thùng rác, xếp theo thời gian đưa vào giảm dần.
+     */
+    public List<Schedule> getTrashSchedules() {
+        return query(helper.getReadableDatabase(), "trashed_at IS NOT NULL", null, "trashed_at DESC");
+    }
+
+    /**
+     * Đếm số lượng buổi học trong thùng rác.
+     */
+    public int getTrashCount() {
+        SQLiteDatabase db = helper.getReadableDatabase();
+        try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM " + T + " WHERE trashed_at IS NOT NULL", null)) {
+            if (c.moveToFirst()) return c.getInt(0);
+        }
+        return 0;
+    }
+
+    /**
+     * Lấy danh sách các buổi học đã kết thúc từ retentionDays ngày trước trở về trước,
+     * chưa nằm trong thùng rác và không phải trạng thái TAM_NGHI.
+     */
+    public List<Schedule> getEligibleOldSchedules(int retentionDays) {
+        long now = System.currentTimeMillis();
+        long thresholdMillis = now - retentionDays * 86_400_000L;
+        Calendar threshCal = Calendar.getInstance();
+        threshCal.setTimeInMillis(thresholdMillis);
+        String threshIso = DateUtil.iso(threshCal);
+
+        // Lấy tất cả lịch học có date <= threshIso, trashed_at IS NULL, status <> 'TAM_NGHI'
+        List<Schedule> candidates = query(helper.getReadableDatabase(),
+                "date<=? AND trashed_at IS NULL AND status<>?",
+                new String[]{threshIso, Schedule.TAM_NGHI},
+                "date ASC, start_min ASC");
+
+        List<Schedule> eligible = new ArrayList<>();
+        for (Schedule s : candidates) {
+            long endEpoch = DateUtil.toMillis(s.date, s.endMin);
+            if (endEpoch <= thresholdMillis) {
+                eligible.add(s);
+            }
+        }
+        return eligible;
+    }
+
+    /**
+     * Xóa vĩnh viễn (hard delete) các bản ghi trong thùng rác đã quá 6 ngày (purge_after <= now).
+     * Chạy an toàn trong transaction.
+     */
+    public int purgeExpiredTrash() {
+        SQLiteDatabase db = helper.getWritableDatabase();
+        long now = System.currentTimeMillis();
+        int deleted = 0;
+        db.beginTransaction();
+        try {
+            deleted = db.delete(T, "trashed_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?",
+                    new String[]{String.valueOf(now)});
+            db.setTransactionSuccessful();
+        } catch (Exception ignored) {
+        } finally {
+            db.endTransaction();
+        }
+        return deleted;
+    }
+
+    /**
+     * Thiết lập một buổi học làm lịch ưu tiên hiển thị trong nhóm trùng giờ.
+     * Đặt is_priority = 0 cho tất cả ID trong nhóm, và is_priority = 1 cho selectedId.
+     */
+    public void setPriority(String selectedId, List<String> groupScheduleIds, Callback cb) {
+        if (selectedId == null || groupScheduleIds == null || groupScheduleIds.isEmpty()) {
+            if (cb != null) cb.onResult(new Result(Result.OK, null, null, null));
+            return;
+        }
+        SQLiteDatabase db = helper.getWritableDatabase();
+        db.beginTransaction();
+        Result r;
+        try {
+            ContentValues resetCv = new ContentValues();
+            resetCv.put("is_priority", 0);
+            for (String id : groupScheduleIds) {
+                db.update(T, resetCv, "id=?", new String[]{id});
+            }
+
+            ContentValues setCv = new ContentValues();
+            setCv.put("is_priority", 1);
+            db.update(T, setCv, "id=?", new String[]{selectedId});
+
+            db.setTransactionSuccessful();
+            r = new Result(Result.OK, "Đã cập nhật lịch ưu tiên.", null, null);
+        } catch (Exception e) {
+            r = new Result(Result.ERROR, "Lỗi khi cập nhật ưu tiên: " + e.getMessage(), null, null);
+        } finally {
+            db.endTransaction();
+        }
+        finish(r, cb);
+    }
+
+    /** Kiểm tra xem đã có buổi học nào giống hệt (cùng ngày, giờ, môn, phòng, lớp) trong database chưa. */
+    public boolean isExactDuplicate(Schedule s) {
+        if (s == null) return false;
+        SQLiteDatabase db = helper.getReadableDatabase();
+        try (Cursor c = db.query(T, new String[]{"id"},
+                "date=? AND start_min=? AND end_min=? AND subject=? AND room=? AND class_name=? AND trashed_at IS NULL",
+                new String[]{s.date, String.valueOf(s.startMin), String.valueOf(s.endMin), s.subject, s.room == null ? "" : s.room, s.className == null ? "" : s.className},
+                null, null, null)) {
+            return c.moveToFirst();
+        }
+    }
+
+    /**
+     * Nhập hàng loạt các buổi học trong một Transaction duy nhất.
+     * Tự động rollback nếu xảy ra ngoại lệ, đảm bảo an toàn toàn vẹn dữ liệu.
+     * Khi thành công, tự động kích hoạt ReminderScheduler để cập nhật báo thức.
+     */
+    public void importBatch(List<Schedule> list, Callback cb) {
+        if (list == null || list.isEmpty()) {
+            if (cb != null) cb.onResult(new Result(Result.OK, "Không có dữ liệu cần nhập", null, null));
+            return;
+        }
+        SQLiteDatabase db = helper.getWritableDatabase();
+        db.beginTransaction();
+        Result r;
+        try {
+            for (Schedule s : list) {
+                long rowId = db.insert(T, null, values(s));
+                if (rowId < 0) {
+                    throw new Exception("Lỗi khi chèn buổi học \"" + s.subject + "\" vào cơ sở dữ liệu.");
+                }
+                s.id = String.valueOf(rowId);
+            }
+            db.setTransactionSuccessful();
+            r = new Result(Result.OK, "Đã nhập thành công " + list.size() + " buổi học.", null, null);
+        } catch (Exception e) {
+            r = new Result(Result.ERROR, "Lỗi khi nhập dữ liệu hàng loạt: " + e.getMessage(), null, null);
+        } finally {
+            db.endTransaction();
+        }
+        finish(r, cb);
+    }
+
+    /** Ghi trong một transaction: nếu !allowConflict, kiểm tra trùng lịch (có GAP phút nghỉ) rồi mới ghi. */
+    private Result write(Schedule s, String id, boolean allowConflict) {
         SQLiteDatabase db = helper.getWritableDatabase();
         db.beginTransaction();
         try {
             List<Schedule> conf = conflicts(db, s.date, Math.max(0, s.startMin - GAP), s.endMin + GAP, id);
-            if (!conf.isEmpty()) {
+            if (!conf.isEmpty() && !allowConflict) {
                 return new Result(Result.CONFLICT, "Trùng lịch học hoặc không đủ thời gian nghỉ giữa các buổi", null, conf);
             }
             if (id == null) {
@@ -257,9 +512,9 @@ public class ScheduleRepository {
                 if (n <= 0) return new Result(Result.ERROR, "Không tìm thấy buổi học để cập nhật", null, null);
             }
             db.setTransactionSuccessful();
-            return new Result(Result.OK, null, s, null);
+            return new Result(Result.OK, null, s, conf);
         } catch (Exception e) {
-            return new Result(Result.ERROR, "Không thể lưu lịch học", null, null);
+            return new Result(Result.ERROR, "Không thể lưu lịch học: " + e.getMessage(), null, null);
         } finally {
             db.endTransaction();
         }

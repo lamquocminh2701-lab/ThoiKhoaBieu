@@ -1,0 +1,5 @@
+﻿Ngày,Thứ,Bắt đầu,Kết thúc,Số tiết,Môn học,Lớp,Phòng,Trạng thái,Ghi chú
+02/09/2026,Thứ Tư,07:00,08:30,2,Hợp lệ dòng 1,21DTH01,A1-201,Đang học,OK
+02/09/2026,Thứ Tư,09:00,08:30,2,Lỗi kết thúc trước bắt đầu,21DTH01,A1-201,Đang học,09:00 > 08:30
+02/09/2026,Thứ Tư,10:00,10:00,2,Lỗi giờ bằng nhau,21DTH01,A1-201,Đang học,10:00 == 10:00
+02/09/2026,Thứ Tư,13:30,15:00,2,Hợp lệ dòng 4,21DTH01,A1-201,Đang học,OK

@@ -1,0 +1,5 @@
+﻿Ngày,Thứ,Bắt đầu,Kết thúc,Số tiết,Môn học,Lớp,Phòng,Trạng thái,Ghi chú
+24/08/2026,Thứ Hai,07:00,08:30,2,Hợp lệ dòng 1,21DTH01,A2-301,Đang học,OK
+32/13/2026,Thứ Ba,07:00,08:30,2,Lỗi ngày không tồn tại,21DTH01,A2-301,Đang học,Ngày sai
+ngay-mai,Thứ Tư,07:00,08:30,2,Lỗi ngày dạng chữ,21DTH01,A2-301,Đang học,Ngày sai
+25/08/2026,Thứ Năm,07:00,08:30,2,Hợp lệ dòng 4,21DTH01,A2-301,Đang học,OK

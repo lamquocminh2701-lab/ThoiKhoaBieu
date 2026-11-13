@@ -31,12 +31,13 @@ public final class ReminderScheduler {
         return PendingIntent.getBroadcast(ctx, REQUEST_CODE, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    /** Buổi học đầu tiên có giờ bắt đầu sau hiện tại (trong 60 ngày tới). */
+    /** Buổi học đầu tiên có giờ bắt đầu sau hiện tại (trong 60 ngày tới), chỉ xét lịch ưu tiên nếu trùng giờ. */
     public static Schedule nextUpcoming(Context ctx) {
         long now = System.currentTimeMillis();
         Calendar today = DateUtil.today();
         List<Schedule> list = ScheduleRepository.get(ctx).getRange(DateUtil.iso(today), DateUtil.iso(DateUtil.addDays(today, 60)));
-        for (Schedule s : list) {
+        List<Schedule> filtered = com.example.thoikhoabieu.conflict.ConflictDetector.filterPriorityOnly(list);
+        for (Schedule s : filtered) {
             if (DateUtil.toMillis(s.date, s.startMin) > now) return s;
         }
         return null;
@@ -53,7 +54,8 @@ public final class ReminderScheduler {
         long lead = Prefs.leadMinutes(ctx) * 60_000L;
         Calendar today = DateUtil.today();
         List<Schedule> list = ScheduleRepository.get(ctx).getRange(DateUtil.iso(today), DateUtil.iso(DateUtil.addDays(today, 60)));
-        for (Schedule s : list) {
+        List<Schedule> filtered = com.example.thoikhoabieu.conflict.ConflictDetector.filterPriorityOnly(list);
+        for (Schedule s : filtered) {
             long trigger = DateUtil.toMillis(s.date, s.startMin) - lead;
             if (trigger > now) {
                 setAlarm(ctx, am, trigger, pending(ctx, s.id));

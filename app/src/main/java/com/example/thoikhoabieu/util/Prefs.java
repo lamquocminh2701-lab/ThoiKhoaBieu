@@ -34,4 +34,13 @@ public final class Prefs {
 
     public static String semesterKey(Context c) { return sp(c).getString("semester", ""); }
     public static void setSemesterKey(Context c, String k) { sp(c).edit().putString("semester", k).apply(); }
+
+    public static boolean cleanupPromptEnabled(Context c) { return sp(c).getBoolean("cleanup_prompt", true); }
+    public static void setCleanupPromptEnabled(Context c, boolean v) { sp(c).edit().putBoolean("cleanup_prompt", v).apply(); }
+
+    public static int retentionDays(Context c) { return Math.max(15, Math.min(20, sp(c).getInt("retention_days", 20))); }
+    public static void setRetentionDays(Context c, int days) { sp(c).edit().putInt("retention_days", Math.max(15, Math.min(20, days))).apply(); }
+
+    public static long lastCleanupDismissedTime(Context c) { return sp(c).getLong("last_cleanup_dismissed", 0L); }
+    public static void setLastCleanupDismissedTime(Context c, long millis) { sp(c).edit().putLong("last_cleanup_dismissed", millis).apply(); }
 }

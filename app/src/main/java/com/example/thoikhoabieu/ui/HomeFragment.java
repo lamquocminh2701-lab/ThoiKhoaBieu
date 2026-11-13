@@ -18,6 +18,9 @@ import androidx.fragment.app.Fragment;
 
 import com.example.thoikhoabieu.AddEditActivity;
 import com.example.thoikhoabieu.R;
+import com.example.thoikhoabieu.conflict.ConflictDetector;
+import com.example.thoikhoabieu.conflict.ConflictGroup;
+import com.example.thoikhoabieu.conflict.ConflictResolutionActivity;
 import com.example.thoikhoabieu.data.ScheduleRepository;
 import com.example.thoikhoabieu.model.Schedule;
 import com.example.thoikhoabieu.model.Semester;
@@ -75,6 +78,8 @@ public class HomeFragment extends Fragment {
             selectedIso = DateUtil.iso(anchor);
             render();
         });
+        v.findViewById(R.id.btn_home_import).setOnClickListener(x ->
+                startActivity(new android.content.Intent(requireContext(), com.example.thoikhoabieu.importer.ImportScheduleActivity.class)));
         btnAdd.setOnClickListener(x -> startActivity(
                 AddEditActivity.intentAdd(requireContext(), monthMode ? selectedIso : defaultDayOfWeek(), -1, -1)));
         return v;
@@ -195,6 +200,16 @@ public class HomeFragment extends Fragment {
         TextView tvBadge = card.findViewById(R.id.tv_badge);
         LinearLayout rows = card.findViewById(R.id.rows);
 
+        List<ConflictGroup> groups = ConflictDetector.groupConflicts(items);
+        boolean hasConflict = false;
+        ConflictGroup firstConflict = null;
+        for (ConflictGroup g : groups) {
+            if (g.isConflict()) {
+                hasConflict = true;
+                if (firstConflict == null) firstConflict = g;
+            }
+        }
+
         tvDow.setText(DateUtil.dowShort(day));
         tvNum.setText(String.valueOf(day.get(Calendar.DAY_OF_MONTH)));
         if (today) {
@@ -203,23 +218,42 @@ public class HomeFragment extends Fragment {
             tvBadge.setText("Hôm nay");
             tvBadge.setBackgroundResource(R.drawable.bg_badge_today);
             tvBadge.setTextColor(ContextCompat.getColor(ctx, R.color.primary));
+        } else if (hasConflict && firstConflict != null) {
+            tvBadge.setText("⚠️ Trùng (" + firstConflict.schedules.size() + ")");
+            tvBadge.setBackgroundResource(R.drawable.bg_warn);
+            tvBadge.setTextColor(ContextCompat.getColor(ctx, R.color.warn_text));
+            ConflictGroup finalFirstConflict = firstConflict;
+            tvBadge.setOnClickListener(x -> startActivity(ConflictResolutionActivity.createIntent(ctx, iso, new ArrayList<>(finalFirstConflict.getAllIds()))));
         } else {
             tvBadge.setText(items.size() + " buổi");
         }
         card.findViewById(R.id.day_header).setOnClickListener(x -> startActivity(AddEditActivity.intentAdd(ctx, iso, -1, -1)));
 
-        for (int i = 0; i < items.size(); i++) {
-            Schedule s = items.get(i);
+        for (int i = 0; i < groups.size(); i++) {
+            ConflictGroup g = groups.get(i);
+            Schedule s = g.getPrioritySchedule();
             View row = inf.inflate(R.layout.item_row_pill, rows, false);
             ((TextView) row.findViewById(R.id.tv_row_time)).setText(s.timeRange());
             ((TextView) row.findViewById(R.id.tv_row_title)).setText(s.subject);
             ((TextView) row.findViewById(R.id.tv_row_room)).setText(s.room);
             TextView note = row.findViewById(R.id.tv_row_note);
-            if (s.hasNote()) {
-                note.setText(s.note.trim());
+
+            if (g.isConflict()) {
+                note.setText("⚠️ Bị trùng (" + g.schedules.size() + " môn) · Chạm để chọn ưu tiên");
                 note.setVisibility(View.VISIBLE);
-                note.setBackgroundResource(today ? R.drawable.bg_note : R.drawable.bg_note_white);
+                note.setBackgroundResource(R.drawable.bg_warn);
+                note.setTextColor(ContextCompat.getColor(ctx, R.color.warn_text));
+                note.setOnClickListener(x -> startActivity(ConflictResolutionActivity.createIntent(ctx, iso, new ArrayList<>(g.getAllIds()))));
+                row.setOnClickListener(x -> startActivity(ConflictResolutionActivity.createIntent(ctx, iso, new ArrayList<>(g.getAllIds()))));
+            } else {
+                if (s.hasNote()) {
+                    note.setText(s.note.trim());
+                    note.setVisibility(View.VISIBLE);
+                    note.setBackgroundResource(today ? R.drawable.bg_note : R.drawable.bg_note_white);
+                }
+                row.setOnClickListener(x -> startActivity(AddEditActivity.intentEdit(ctx, s.id)));
             }
+
             row.setBackgroundResource(!today ? R.drawable.bg_row : (s.hasNote() ? R.drawable.bg_row_white : R.drawable.bg_row_today));
             if (Schedule.TAM_NGHI.equals(s.status)) {
                 row.setBackgroundResource(R.drawable.bg_row_pause);
@@ -227,20 +261,19 @@ public class HomeFragment extends Fragment {
                 ((TextView) row.findViewById(R.id.tv_row_time)).setTextColor(red);
                 ((TextView) row.findViewById(R.id.tv_row_title)).setTextColor(red);
             }
-            row.setOnClickListener(x -> startActivity(AddEditActivity.intentEdit(ctx, s.id)));
             rows.addView(row);
 
-            if (i + 1 < items.size()) {
-                Schedule n = items.get(i + 1);
-                if (n.startMin - s.endMin >= DateUtil.MIN_GAP) {
+            if (i + 1 < groups.size()) {
+                ConflictGroup nextG = groups.get(i + 1);
+                if (nextG.startMin - g.endMin >= DateUtil.MIN_GAP) {
                     View gap = inf.inflate(R.layout.item_row_pill, rows, false);
-                    ((TextView) gap.findViewById(R.id.tv_row_time)).setText(DateUtil.hm(s.endMin) + "–" + DateUtil.hm(n.startMin));
+                    ((TextView) gap.findViewById(R.id.tv_row_time)).setText(DateUtil.hm(g.endMin) + "–" + DateUtil.hm(nextG.startMin));
                     TextView title = gap.findViewById(R.id.tv_row_title);
                     title.setText("Trống");
                     title.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
                     ((TextView) gap.findViewById(R.id.tv_row_room)).setText("—");
                     gap.setBackgroundResource(today ? R.drawable.bg_row_today : R.drawable.bg_row);
-                    int from = s.endMin, to = n.startMin;
+                    int from = g.endMin, to = nextG.startMin;
                     gap.setOnClickListener(x -> startActivity(AddEditActivity.intentAdd(ctx, iso, from, to)));
                     rows.addView(gap);
                 }
@@ -370,40 +403,51 @@ public class HomeFragment extends Fragment {
         TextView tvNum = card.findViewById(R.id.tv_daynum);
         LinearLayout rows = card.findViewById(R.id.rows);
 
+        List<ConflictGroup> groups = ConflictDetector.groupConflicts(items);
+
         tvDow.setText(DateUtil.dowShort(day));
         tvNum.setText(String.valueOf(day.get(Calendar.DAY_OF_MONTH)));
         card.setBackgroundResource(R.drawable.bg_card_selected);
         tvNum.setTextColor(ContextCompat.getColor(ctx, R.color.primary));
         card.findViewById(R.id.col_day).setOnClickListener(x -> startActivity(AddEditActivity.intentAdd(ctx, iso, -1, -1)));
 
-        for (int i = 0; i < items.size(); i++) {
-            Schedule s = items.get(i);
+        for (int i = 0; i < groups.size(); i++) {
+            ConflictGroup g = groups.get(i);
+            Schedule s = g.getPrioritySchedule();
             View row = inf.inflate(R.layout.item_week_row, rows, false);
             ((TextView) row.findViewById(R.id.tv_row_time)).setText(DateUtil.hm(s.startMin));
             ((TextView) row.findViewById(R.id.tv_row_title)).setText(s.subject);
-            ((TextView) row.findViewById(R.id.tv_row_room)).setText(s.room);
-            if (Schedule.TAM_NGHI.equals(s.status)) {
-                int red = ContextCompat.getColor(ctx, R.color.danger);
-                ((TextView) row.findViewById(R.id.tv_row_time)).setTextColor(red);
-                ((TextView) row.findViewById(R.id.tv_row_title)).setTextColor(red);
-                ((TextView) row.findViewById(R.id.tv_row_room)).setTextColor(red);
+            TextView tvRoom = row.findViewById(R.id.tv_row_room);
+
+            if (g.isConflict()) {
+                tvRoom.setText("⚠️ Trùng (" + g.schedules.size() + ")");
+                tvRoom.setTextColor(ContextCompat.getColor(ctx, R.color.warn_text));
+                row.setOnClickListener(x -> startActivity(ConflictResolutionActivity.createIntent(ctx, iso, new ArrayList<>(g.getAllIds()))));
+            } else {
+                tvRoom.setText(s.room);
+                if (Schedule.TAM_NGHI.equals(s.status)) {
+                    int red = ContextCompat.getColor(ctx, R.color.danger);
+                    ((TextView) row.findViewById(R.id.tv_row_time)).setTextColor(red);
+                    ((TextView) row.findViewById(R.id.tv_row_title)).setTextColor(red);
+                    tvRoom.setTextColor(red);
+                }
+                row.setOnClickListener(x -> startActivity(AddEditActivity.intentEdit(ctx, s.id)));
             }
-            row.setOnClickListener(x -> startActivity(AddEditActivity.intentEdit(ctx, s.id)));
             rows.addView(row);
 
-            if (i + 1 < items.size()) {
-                Schedule n = items.get(i + 1);
-                if (n.startMin - s.endMin >= DateUtil.MIN_GAP) {
+            if (i + 1 < groups.size()) {
+                ConflictGroup nextG = groups.get(i + 1);
+                if (nextG.startMin - g.endMin >= DateUtil.MIN_GAP) {
                     View gap = inf.inflate(R.layout.item_week_row, rows, false);
                     TextView t = gap.findViewById(R.id.tv_row_time);
-                    t.setText(DateUtil.hm(s.endMin) + "–" + DateUtil.hm(n.startMin));
+                    t.setText(DateUtil.hm(g.endMin) + "–" + DateUtil.hm(nextG.startMin));
                     t.setTextSize(12);
                     t.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
                     TextView title = gap.findViewById(R.id.tv_row_title);
                     title.setText("Trống");
                     title.setTextColor(ContextCompat.getColor(ctx, R.color.text_hint));
                     ((TextView) gap.findViewById(R.id.tv_row_room)).setText("");
-                    int from = s.endMin, to = n.startMin;
+                    int from = g.endMin, to = nextG.startMin;
                     gap.setOnClickListener(x -> startActivity(AddEditActivity.intentAdd(ctx, iso, from, to)));
                     rows.addView(gap);
                 }

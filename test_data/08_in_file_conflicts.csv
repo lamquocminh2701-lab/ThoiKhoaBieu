@@ -1,0 +1,5 @@
+﻿Ngày,Thứ,Bắt đầu,Kết thúc,Số tiết,Môn học,Lớp,Phòng,Trạng thái,Ghi chú
+04/09/2026,Thứ Sáu,07:00,08:30,2,Môn A (Sáng sớm),21DTH01,A1-101,Đang học,Được duyệt dòng 1
+04/09/2026,Thứ Sáu,08:00,09:30,2,Môn B (Trùng giờ với A),21DTH01,A1-102,Đang học,Trùng từ 08:00 đến 08:30
+04/09/2026,Thứ Sáu,08:30,10:00,2,Môn C (Sát giờ với A vi phạm GAP 1p),21DTH01,A1-103,Đang học,A kết thúc 08:30, C bắt đầu 08:30
+04/09/2026,Thứ Sáu,10:15,11:45,2,Môn D (Cách xa A và C),21DTH01,A1-104,Đang học,Hợp lệ vì cách xa

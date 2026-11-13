@@ -374,6 +374,22 @@
                     android:textStyle="bold"
                     app:cornerRadius="12dp" />
             </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_import_schedule"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="@color/primary_light"
+                android:elevation="0dp"
+                android:text="Nhập lịch từ tệp CSV"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp"
+                app:icon="@drawable/ic_layers"
+                app:iconGravity="textStart"
+                app:iconTint="@color/primary" />
         </LinearLayout>
 
         <TextView

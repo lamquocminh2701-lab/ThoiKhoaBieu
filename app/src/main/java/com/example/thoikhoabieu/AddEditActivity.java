@@ -332,12 +332,6 @@ public class AddEditActivity extends AppCompatActivity {
             Toast.makeText(this, "Giờ kết thúc phải sau giờ bắt đầu", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (!conflicts().isEmpty()) {
-            showConflictDialog(null);
-            refresh();
-            return;
-        }
-
         if (busy) return;
         Schedule s = new Schedule();
         s.id = editId;
@@ -350,6 +344,13 @@ public class AddEditActivity extends AppCompatActivity {
         s.startMin = startMin;
         s.endMin = endMin;
 
+        List<Schedule> conf = conflicts();
+        if (!conf.isEmpty()) {
+            refresh();
+            showConflictDialog(s, conf);
+            return;
+        }
+
         setBusy(true);
         ScheduleRepository.Callback done = r -> {
             setBusy(false);
@@ -360,7 +361,7 @@ public class AddEditActivity extends AppCompatActivity {
             } else if (r.code == ScheduleRepository.Result.CONFLICT) {
                 // DB là nơi quyết định cuối cùng về trùng lịch
                 refresh();
-                showConflictDialog(r.conflicts);
+                showConflictDialog(s, r.conflicts);
             } else {
                 Toast.makeText(this, r.message != null ? r.message : "Không thể lưu lịch học. Vui lòng thử lại.", Toast.LENGTH_LONG).show();
             }
@@ -369,40 +370,50 @@ public class AddEditActivity extends AppCompatActivity {
         else db.insert(s, done);
     }
 
+    private void forceSave(Schedule s) {
+        setBusy(true);
+        ScheduleRepository.Callback done = r -> {
+            setBusy(false);
+            if (r.ok()) {
+                Toast.makeText(this, "Đã lưu lịch học (đã ghi nhận trùng giờ)", Toast.LENGTH_SHORT).show();
+                setResult(RESULT_OK);
+                finish();
+            } else {
+                Toast.makeText(this, r.message != null ? r.message : "Không thể lưu lịch học.", Toast.LENGTH_LONG).show();
+            }
+        };
+        if (editId != null) db.update(s, true, done);
+        else db.insert(s, true, done);
+    }
+
     private void setBusy(boolean b) {
         busy = b;
         btnSave.setEnabled(!b);
         btnSave.setText(b ? "Đang lưu..." : (editing != null ? "Lưu thay đổi" : "Lưu lịch"));
     }
 
-    private void showConflictDialog(List<Schedule> fromServer) {
+    private void showConflictDialog(Schedule toSave, List<Schedule> fromServer) {
         List<Schedule> conf = fromServer != null && !fromServer.isEmpty() ? fromServer : conflicts();
         List<int[]> free = freeSlotsGap();
         Calendar c = DateUtil.parse(dateIso);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Khung giờ ").append(DateUtil.hm(startMin)).append("–").append(DateUtil.hm(endMin))
-                .append(" ngày ").append(DateUtil.dmy(c))
-                .append(" trùng lịch hoặc không đủ ").append(GAP).append(" phút nghỉ giữa các buổi:\n");
+        sb.append("Lịch học này trùng khung giờ với:\n");
         for (Schedule x : conf) {
             sb.append("• ").append(x.subject).append(" (").append(x.timeRange()).append(", phòng ").append(x.room).append(")\n");
         }
-        if (free.isEmpty()) {
-            sb.append("\nNgày này không còn khoảng trống, hãy chọn ngày khác.");
-        } else {
-            sb.append("\nBạn chỉ có thể nhập vào các khoảng trống:\n");
-            for (int[] r : free) sb.append("• ").append(DateUtil.hm(r[0])).append("–").append(DateUtil.hm(r[1])).append("\n");
-        }
+        sb.append("\nBạn vẫn muốn lưu lịch này chứ? (Ứng dụng cho phép lưu lịch trùng và chọn môn ưu tiên hiển thị trên Thời khóa biểu).");
 
         MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(this)
-                .setTitle("Trùng lịch học")
+                .setTitle("Cảnh báo trùng lịch học")
                 .setMessage(sb.toString().trim())
-                .setPositiveButton("Đã hiểu", null);
+                .setPositiveButton("Vẫn lưu lịch", (dialog, which) -> forceSave(toSave))
+                .setNegativeButton("Chỉnh sửa lại", null);
 
         final int dur = endMin - startMin;
         final int st = firstFreeStartGap(dur, DateUtil.DAY_START);
         if (st >= 0) {
-            b.setNeutralButton("Chọn giờ trống đầu tiên", (d, w) -> {
+            b.setNeutralButton("Chọn giờ trống", (d, w) -> {
                 startMin = st;
                 endMin = st + dur;
                 refresh();

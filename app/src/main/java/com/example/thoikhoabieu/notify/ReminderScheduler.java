@@ -13,6 +13,7 @@ import com.example.thoikhoabieu.util.Prefs;
 
 import java.util.Calendar;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Luôn chỉ đặt MỘT báo thức cho buổi học kế tiếp. Khi báo thức nổ (hoặc dữ liệu/cài đặt đổi)
@@ -36,7 +37,7 @@ public final class ReminderScheduler {
         long now = System.currentTimeMillis();
         Calendar today = DateUtil.today();
         List<Schedule> list = ScheduleRepository.get(ctx).getRange(DateUtil.iso(today), DateUtil.iso(DateUtil.addDays(today, 60)));
-        List<Schedule> filtered = com.example.thoikhoabieu.conflict.ConflictDetector.filterPriorityOnly(list);
+        List<Schedule> filtered = getReminderCandidates(list);
         for (Schedule s : filtered) {
             if (DateUtil.toMillis(s.date, s.startMin) > now) return s;
         }
@@ -54,7 +55,7 @@ public final class ReminderScheduler {
         long lead = Prefs.leadMinutes(ctx) * 60_000L;
         Calendar today = DateUtil.today();
         List<Schedule> list = ScheduleRepository.get(ctx).getRange(DateUtil.iso(today), DateUtil.iso(DateUtil.addDays(today, 60)));
-        List<Schedule> filtered = com.example.thoikhoabieu.conflict.ConflictDetector.filterPriorityOnly(list);
+        List<Schedule> filtered = getReminderCandidates(list);
         for (Schedule s : filtered) {
             long trigger = DateUtil.toMillis(s.date, s.startMin) - lead;
             if (trigger > now) {
@@ -63,7 +64,23 @@ public final class ReminderScheduler {
             }
         }
     }
+    private static List<Schedule> getReminderCandidates(
+            List<Schedule> schedules) {
 
+        List<Schedule> active = new ArrayList<>();
+
+        if (schedules != null) {
+            for (Schedule schedule : schedules) {
+                if (schedule != null
+                        && Schedule.DANG_HOC.equals(schedule.status)) {
+                    active.add(schedule);
+                }
+            }
+        }
+
+        return com.example.thoikhoabieu.conflict.ConflictDetector
+                .filterPriorityOnly(active);
+    }
     private static void setAlarm(Context ctx, AlarmManager am, long trigger, PendingIntent pi) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {

@@ -42,7 +42,7 @@ public class SettingsFragment extends Fragment {
 
     private MaterialSwitch swReminder, swSound, swVibrate, swQuiet, swCleanup;
     private TextView tvPerm, tvQuietRange, tvPreview, chip5, chip15, chip30;
-    private TextView tvRet15, tvRet17, tvRet20, tvTrashBadge;
+    private TextView tvRet15, tvRet17, tvRet180, tvTrashBadge;
     private View body, cleanupBody, layoutRowTrash, btnTriggerCleanupNow;
 
     private final ActivityResultLauncher<String> permLauncher =
@@ -83,7 +83,7 @@ public class SettingsFragment extends Fragment {
         cleanupBody = v.findViewById(R.id.cleanup_settings_body);
         tvRet15 = v.findViewById(R.id.tv_retention_15);
         tvRet17 = v.findViewById(R.id.tv_retention_17);
-        tvRet20 = v.findViewById(R.id.tv_retention_20);
+        tvRet180 = v.findViewById(R.id.tv_retention_20);
         layoutRowTrash = v.findViewById(R.id.layout_row_trash);
         tvTrashBadge = v.findViewById(R.id.tv_trash_badge);
         btnTriggerCleanupNow = v.findViewById(R.id.btn_trigger_cleanup_now);
@@ -110,7 +110,7 @@ public class SettingsFragment extends Fragment {
 
         tvRet15.setOnClickListener(x -> { retentionDays = 15; updateUi(); });
         tvRet17.setOnClickListener(x -> { retentionDays = 17; updateUi(); });
-        tvRet20.setOnClickListener(x -> { retentionDays = 20; updateUi(); });
+        tvRet180.setOnClickListener(x -> { retentionDays = 180; updateUi(); });
 
         layoutRowTrash.setOnClickListener(x -> startActivity(new Intent(requireContext(), TrashActivity.class)));
         btnTriggerCleanupNow.setOnClickListener(x -> manualTriggerCleanup());
@@ -211,7 +211,7 @@ public class SettingsFragment extends Fragment {
         styleLead(chip30, 30);
         styleRetention(tvRet15, 15);
         styleRetention(tvRet17, 17);
-        styleRetention(tvRet20, 20);
+        styleRetention(tvRet180, 180);
         tvQuietRange.setText(DateUtil.hm(qStart) + " – " + DateUtil.hm(qEnd));
         body.setAlpha(enabled ? 1f : 0.45f);
         setEnabledDeep(body, enabled);

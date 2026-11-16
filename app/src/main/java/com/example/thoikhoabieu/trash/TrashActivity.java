@@ -29,13 +29,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Màn hình Quản lý Thùng rác:
- * - Xem danh sách các buổi học đã đưa vào thùng rác.
- * - Hiển thị bộ đếm ngược thời gian lưu trữ còn lại trước khi xóa vĩnh viễn (tối đa 6 ngày).
- * - Khôi phục từng buổi học hoặc khôi phục tất cả.
- * - Xuất file nhật ký TXT lưu trữ bằng Storage Access Framework (SAF).
- */
 public class TrashActivity extends AppCompatActivity {
 
     private ScheduleRepository repo;
@@ -72,7 +65,7 @@ public class TrashActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Tự động dọn dẹp các bản ghi quá hạn 6 ngày
+        // Tự động dọn dẹp các bản ghi quá hạn 30 ngày
         repo.purgeExpiredTrash();
         loadTrash();
     }

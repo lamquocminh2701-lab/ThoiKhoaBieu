@@ -19,18 +19,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
+import java.util.Calendar;
 
-/**
- * Nguồn dữ liệu duy nhất của app: SQLite trên máy, hoạt động hoàn toàn offline.
- *
- * <ul>
- *   <li>Đọc (getByDate, getRange, findConflicts, freeSlots...) trả kết quả ngay.</li>
- *   <li>Ghi (insert/update/delete) chạy đồng bộ và gọi callback ngay; dữ liệu ít nên rất nhanh.</li>
- *   <li>Thêm/sửa luôn kiểm tra trùng lịch (kể cả {@link #GAP} phút nghỉ) trong cùng một transaction,
- *       nên dữ liệu trùng không thể vào database.</li>
- * </ul>
- */
 public class ScheduleRepository {
+    /** Thời gian giữ lịch trong thùng rác: 30 ngày (nguồn duy nhất). */
+    public static final long TRASH_MS = 30L * 24 * 60 * 60 * 1000;
+
     /** Số phút nghỉ tối thiểu giữa hai buổi học. */
     public static final int GAP = 1;
 
@@ -279,7 +273,7 @@ public class ScheduleRepository {
 
     /**
      * Chuyển danh sách lịch học vào thùng rác (soft delete).
-     * Đặt trashed_at = now, purge_after = now + 6 ngày.
+     * Đặt trashed_at = now, purge_after = now + 30 ngày.
      */
     public void moveToTrash(List<String> ids, Callback cb) {
         if (ids == null || ids.isEmpty()) {
@@ -288,7 +282,10 @@ public class ScheduleRepository {
         }
         SQLiteDatabase db = helper.getWritableDatabase();
         long now = System.currentTimeMillis();
-        long purgeAfter = now + 6 * 86_400_000L; // 6 ngày lưu trữ
+
+        // Thời gian lưu trong thùng rác: 30 ngày
+        long purgeAfter = now + TRASH_MS;
+
         ContentValues cv = new ContentValues();
         cv.put("trashed_at", now);
         cv.put("purge_after", purgeAfter);
@@ -371,10 +368,6 @@ public class ScheduleRepository {
         return 0;
     }
 
-    /**
-     * Lấy danh sách các buổi học đã kết thúc từ retentionDays ngày trước trở về trước,
-     * chưa nằm trong thùng rác và không phải trạng thái TAM_NGHI.
-     */
     public List<Schedule> getEligibleOldSchedules(int retentionDays) {
         long now = System.currentTimeMillis();
         long thresholdMillis = now - retentionDays * 86_400_000L;
@@ -398,18 +391,14 @@ public class ScheduleRepository {
         return eligible;
     }
 
-    /**
-     * Xóa vĩnh viễn (hard delete) các bản ghi trong thùng rác đã quá 6 ngày (purge_after <= now).
-     * Chạy an toàn trong transaction.
-     */
     public int purgeExpiredTrash() {
         SQLiteDatabase db = helper.getWritableDatabase();
         long now = System.currentTimeMillis();
         int deleted = 0;
         db.beginTransaction();
         try {
-            deleted = db.delete(T, "trashed_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?",
-                    new String[]{String.valueOf(now)});
+            deleted = db.delete(T, "trashed_at IS NOT NULL AND trashed_at <= ?",
+                    new String[]{String.valueOf(now - TRASH_MS)});
             db.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
@@ -418,10 +407,6 @@ public class ScheduleRepository {
         return deleted;
     }
 
-    /**
-     * Thiết lập một buổi học làm lịch ưu tiên hiển thị trong nhóm trùng giờ.
-     * Đặt is_priority = 0 cho tất cả ID trong nhóm, và is_priority = 1 cho selectedId.
-     */
     public void setPriority(String selectedId, List<String> groupScheduleIds, Callback cb) {
         if (selectedId == null || groupScheduleIds == null || groupScheduleIds.isEmpty()) {
             if (cb != null) cb.onResult(new Result(Result.OK, null, null, null));
@@ -463,11 +448,6 @@ public class ScheduleRepository {
         }
     }
 
-    /**
-     * Nhập hàng loạt các buổi học trong một Transaction duy nhất.
-     * Tự động rollback nếu xảy ra ngoại lệ, đảm bảo an toàn toàn vẹn dữ liệu.
-     * Khi thành công, tự động kích hoạt ReminderScheduler để cập nhật báo thức.
-     */
     public void importBatch(List<Schedule> list, Callback cb) {
         if (list == null || list.isEmpty()) {
             if (cb != null) cb.onResult(new Result(Result.OK, "Không có dữ liệu cần nhập", null, null));
@@ -525,12 +505,6 @@ public class ScheduleRepository {
         if (cb != null) cb.onResult(r);
     }
 
-    // ================================================================ nhập dữ liệu từ bản MongoDB
-
-    /**
-     * Nếu máy từng chạy bản dùng MongoDB, file schedules_cache.json còn giữ một bản sao toàn bộ lịch học.
-     * Khi bảng còn trống thì nhập các buổi đó vào SQLite rồi đổi tên file để không nhập lại.
-     */
     private void importLegacyCache() {
         File f = new File(ctx.getFilesDir(), "schedules_cache.json");
         if (!f.exists()) return;

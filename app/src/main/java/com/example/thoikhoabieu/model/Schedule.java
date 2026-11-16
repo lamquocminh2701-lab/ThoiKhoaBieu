@@ -20,30 +20,24 @@ public class Schedule {
     public String room;
     /** yyyy-MM-dd */
     public String date;
-    /** Phút trong ngày (0–1439). */
     public int startMin;
     public int endMin;
     public String note;
     public String status = DANG_HOC;
 
-    /** Thời điểm đưa vào thùng rác (epoch millis); null nếu đang hoạt động. */
     public Long trashedAt;
-    /** Thời điểm đủ điều kiện xóa vĩnh viễn (epoch millis); null nếu đang hoạt động. */
     public Long purgeAfter;
-    /** Cờ ưu tiên hiển thị khi nằm trong nhóm lịch trùng giờ. */
     public boolean isPriority;
-
     public boolean isTrashed() {
         return trashedAt != null && trashedAt > 0;
     }
-
     public boolean isPurgeEligible() {
-        return isTrashed() && purgeAfter != null && System.currentTimeMillis() >= purgeAfter;
+        return isTrashed() && System.currentTimeMillis() >= trashedAt + com.example.thoikhoabieu.data.ScheduleRepository.TRASH_MS;
     }
-
+    //    lịch học được tạm lưu trong thùng rác 30 ngày trước khi xóa vĩnh viễn
     public String timeLeftText() {
-        if (!isTrashed() || purgeAfter == null) return "";
-        long diff = purgeAfter - System.currentTimeMillis();
+        if (!isTrashed()) return "";
+        long diff = (trashedAt + com.example.thoikhoabieu.data.ScheduleRepository.TRASH_MS) - System.currentTimeMillis();
         if (diff <= 0) return "Đã đủ điều kiện xóa vĩnh viễn";
         long days = diff / (24 * 3600 * 1000L);
         long hours = (diff % (24 * 3600 * 1000L)) / (3600 * 1000L);
@@ -54,29 +48,29 @@ public class Schedule {
             return "Còn " + hours + " giờ " + mins + " phút để khôi phục";
         }
     }
-
+    //  Thời gian buổi học
     public int duration() {
         return endMin - startMin;
     }
-
+    //  Số tiết học
     public int periods() {
         return DateUtil.periods(startMin, endMin);
     }
-
+    //  chuyển đổi thời gian thành thời gian buổi học
     public String timeRange() {
         return DateUtil.hm(startMin) + "–" + DateUtil.hm(endMin);
     }
-
+    //    kiểm tra buổi học có ghi chú ko
     public boolean hasNote() {
         return note != null && !note.trim().isEmpty();
     }
-
+    //  Trạng thái môn
     public static String statusLabel(String status) {
         if (HOAN_THANH.equals(status)) return "Đã hoàn thành";
         if (TAM_NGHI.equals(status)) return "Tạm nghỉ";
         return "Đang học";
     }
-
+    //  chuyển một đối tượng Schedule thành JSONObject
     public JSONObject toJson() throws JSONException {
         JSONObject o = new JSONObject();
         o.put("subject", subject);
@@ -92,7 +86,7 @@ public class Schedule {
         o.put("isPriority", isPriority);
         return o;
     }
-
+    //tạo Schedule uuwf JSON Object để khôi phục hoặc nhập dữ liệu.
     public static Schedule fromJson(JSONObject o) {
         Schedule s = new Schedule();
         s.id = o.optString("id", null);

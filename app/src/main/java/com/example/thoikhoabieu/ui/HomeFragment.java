@@ -211,7 +211,7 @@ public class HomeFragment extends Fragment {
         }
 
         tvDow.setText(DateUtil.dowShort(day));
-        tvNum.setText(String.valueOf(day.get(Calendar.DAY_OF_MONTH)));
+        tvNum.setText(DateUtil.dmy(day));
         if (today) {
             card.setBackgroundResource(R.drawable.bg_card_today);
             tvNum.setTextColor(ContextCompat.getColor(ctx, R.color.primary));

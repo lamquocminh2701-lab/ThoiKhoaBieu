@@ -15,7 +15,7 @@ import java.util.Locale;
 /**
  * Trình xuất nhật ký dọn dẹp lịch học sang định dạng văn bản TXT chuẩn UTF-8:
  * - Ghi lại đầy đủ thông tin các buổi học đã được đưa vào thùng rác.
- * - Hiển thị số lượng, thời gian đưa vào thùng rác và thời điểm xóa vĩnh viễn sau 6 ngày.
+ * - Hiển thị số lượng, thời gian đưa vào thùng rác và thời điểm xóa vĩnh viễn sau 30 ngày.
  */
 public final class TrashLogExporter {
 
@@ -26,14 +26,14 @@ public final class TrashLogExporter {
         StringBuilder sb = new StringBuilder();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
         long now = System.currentTimeMillis();
-        long purgeEstimate = now + 6 * 86_400_000L;
+        long purgeEstimate = now + com.example.thoikhoabieu.data.ScheduleRepository.TRASH_MS;
 
         sb.append("================================================================================\n");
         sb.append("NHẬT KÝ DỌN DẸP LỊCH HỌC — THỜI KHÓA BIỂU CÁ NHÂN\n");
         sb.append("================================================================================\n");
         sb.append("Thời gian tạo: ").append(sdf.format(new Date(now))).append("\n");
         sb.append("Số lượng buổi học dọn dẹp: ").append(schedules != null ? schedules.size() : 0).append("\n");
-        sb.append("Thời gian lưu trữ trong thùng rác: 6 ngày\n");
+        sb.append("Thời gian lưu trữ trong thùng rác: 30 ngày\n");
         sb.append("Ngày xóa vĩnh viễn dự kiến: ").append(sdf.format(new Date(purgeEstimate))).append("\n");
         sb.append("--------------------------------------------------------------------------------\n");
         sb.append("DANH SÁCH CHI TIẾT\n");
@@ -46,8 +46,8 @@ public final class TrashLogExporter {
                 String dow = DateUtil.dowFull(cal);
 
                 sb.append(String.format(Locale.US, "[%d] Môn học: %s\n", i + 1, s.subject));
-                sb.append(String.format(Locale.US, "    Lớp: %s | Phòng: %s\n", 
-                        (s.className != null && !s.className.isEmpty()) ? s.className : "Chưa có", 
+                sb.append(String.format(Locale.US, "    Lớp: %s | Phòng: %s\n",
+                        (s.className != null && !s.className.isEmpty()) ? s.className : "Chưa có",
                         (s.room != null && !s.room.isEmpty()) ? s.room : "Chưa có"));
                 sb.append(String.format(Locale.US, "    Ngày học: %s (%s) | Thời gian: %s (%d tiết)\n",
                         s.date, dow, s.timeRange(), s.periods()));
@@ -55,7 +55,7 @@ public final class TrashLogExporter {
                 sb.append(String.format(Locale.US, "    Ghi chú: %s\n", (s.hasNote() ? s.note.trim() : "Không có")));
 
                 long trashedTime = (s.trashedAt != null && s.trashedAt > 0) ? s.trashedAt : now;
-                long purgeTime = (s.purgeAfter != null && s.purgeAfter > 0) ? s.purgeAfter : (trashedTime + 6 * 86_400_000L);
+                long purgeTime = trashedTime + com.example.thoikhoabieu.data.ScheduleRepository.TRASH_MS;
 
                 sb.append(String.format(Locale.US, "    Đưa vào thùng rác lúc: %s\n", sdf.format(new Date(trashedTime))));
                 sb.append(String.format(Locale.US, "    Hạn khôi phục: %s\n", sdf.format(new Date(purgeTime))));

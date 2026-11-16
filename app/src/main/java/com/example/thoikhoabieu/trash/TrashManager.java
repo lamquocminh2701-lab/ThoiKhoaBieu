@@ -14,13 +14,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Trình quản lý kiểm tra và nhắc dọn dẹp các buổi học cũ:
- * - Kích hoạt khi mở ứng dụng (onResume).
- * - Kiểm tra cấu hình Cài đặt (Bật/Tắt, thời hạn 15–20 ngày).
- * - Quản lý thời gian tạm hoãn (Snooze 7 ngày).
- * - Hiển thị hộp thoại nhắc nhở thân thiện, an toàn, không làm phiền người dùng.
- */
 public final class TrashManager {
 
     private TrashManager() {
@@ -32,7 +25,7 @@ public final class TrashManager {
         Context ctx = activity.getApplicationContext();
         ScheduleRepository repo = ScheduleRepository.get(ctx);
 
-        // 1. Tự động xóa vĩnh viễn các mục thùng rác đã quá hạn 6 ngày
+        // 1. Tự động xóa vĩnh viễn các mục thùng rác đã quá hạn 30 ngày
         repo.purgeExpiredTrash();
 
         // 2. Kiểm tra tính năng dọn dẹp có được bật không
@@ -65,7 +58,7 @@ public final class TrashManager {
         sb.append("Phát hiện ").append(count).append(" buổi học đã kết thúc hơn ")
                 .append(retentionDays).append(" ngày trước.\n\n")
                 .append("Bạn có muốn chuyển các buổi học này vào thùng rác để thời khóa biểu gọn gàng hơn không?\n\n")
-                .append("• Lịch trong thùng rác có thể khôi phục trong vòng 6 ngày.\n")
+                .append("• Lịch trong thùng rác có thể khôi phục trong vòng 30 ngày.\n")
                 .append("• Bạn có thể xuất tệp TXT để lưu lại toàn bộ thông tin buổi học.");
 
         new MaterialAlertDialogBuilder(activity)

@@ -177,11 +177,6 @@ public class StatsFragment extends Fragment {
             p.setProgress(s.periods);
             ((TextView) row.findViewById(R.id.tv_count)).setText(String.valueOf(s.periods));
             StatusStyle.apply((TextView) row.findViewById(R.id.tv_status), s.status);
-            TextView note = row.findViewById(R.id.tv_note);
-            if (s.note != null && !s.note.isEmpty()) {
-                note.setText(s.note);
-                note.setVisibility(View.VISIBLE);
-            }
             bars.addView(row);
             shown++;
         }

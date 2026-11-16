@@ -408,7 +408,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Khoảng thời gian dọn (15–20 ngày):"
+                    android:text="Khoảng thời gian dọn lịch đã kết thúc:"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
@@ -449,7 +449,7 @@
                         android:layout_weight="1"
                         android:background="@drawable/bg_chip_selected"
                         android:gravity="center"
-                        android:text="20 ngày"
+                        android:text="180 ngày"
                         android:textSize="13sp" />
                 </LinearLayout>
 

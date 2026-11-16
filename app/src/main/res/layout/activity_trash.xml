@@ -78,7 +78,7 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Banner giải thích vòng đời 6 ngày -->
+            <!-- Banner giải thích vòng đời 30 ngày -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -89,7 +89,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ℹ️ Lưu trữ tạm thời trong 6 ngày"
+                    android:text="ℹ️ Lưu trữ tạm thời trong 30 ngày"
                     android:textColor="@color/primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -98,7 +98,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Các buổi học cũ đã được chuyển vào thùng rác. Sau đúng 6 ngày kể từ khi dọn dẹp, hệ thống sẽ tự động xóa vĩnh viễn. Bạn có thể khôi phục bất cứ lúc nào hoặc xuất nhật ký TXT để lưu lại hồ sơ."
+                    android:text="Các buổi học cũ đã được chuyển vào thùng rác. Sau đúng 30 ngày kể từ khi dọn dẹp, hệ thống sẽ tự động xóa vĩnh viễn. Bạn có thể khôi phục bất cứ lúc nào hoặc xuất nhật ký TXT để lưu lại hồ sơ."
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>
